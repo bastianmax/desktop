@@ -1,19 +1,19 @@
 import * as React from 'react'
 import * as Path from 'path'
 
-import { ICommitMessage } from '../../lib/app-state'
 import { IGitHubUser } from '../../lib/databases'
 import { Dispatcher } from '../../lib/dispatcher'
-import { ITrailer } from '../../lib/git/interpret-trailers'
 import { IMenuItem } from '../../lib/menu-item'
 import { revealInFileManager } from '../../lib/app-shell'
 import {
   AppFileStatus,
   WorkingDirectoryStatus,
   WorkingDirectoryFileChange,
+  AppFileStatusKind,
 } from '../../models/status'
 import { DiffSelectionType } from '../../models/diff'
 import { CommitIdentity } from '../../models/commit-identity'
+import { ICommitMessage } from '../../models/commit-message'
 import { Repository } from '../../models/repository'
 import { IAuthor } from '../../models/author'
 import { List, ClickSource } from '../lib/list'
@@ -21,6 +21,7 @@ import { Checkbox, CheckboxValue } from '../lib/checkbox'
 import {
   isSafeFileExtension,
   DefaultEditorLabel,
+  CopyFilePathLabel,
   RevealInFileManagerLabel,
   OpenWithDefaultProgramLabel,
 } from '../lib/context-menu'
@@ -29,6 +30,9 @@ import { ChangedFile } from './changed-file'
 import { IAutocompletionProvider } from '../autocompletion'
 import { showContextualMenu } from '../main-process-proxy'
 import { arrayEquals } from '../../lib/equality'
+import { clipboard } from 'electron'
+import { basename } from 'path'
+import { ICommitContext } from '../../models/commit'
 
 const RowHeight = 29
 
@@ -41,15 +45,13 @@ interface IChangesListProps {
   readonly onFileSelectionChanged: (rows: ReadonlyArray<number>) => void
   readonly onIncludeChanged: (path: string, include: boolean) => void
   readonly onSelectAll: (selectAll: boolean) => void
-  readonly onCreateCommit: (
-    summary: string,
-    description: string | null,
-    trailers?: ReadonlyArray<ITrailer>
-  ) => Promise<boolean>
+  readonly onCreateCommit: (context: ICommitContext) => Promise<boolean>
   readonly onDiscardChanges: (file: WorkingDirectoryFileChange) => void
   readonly askForConfirmationOnDiscardChanges: boolean
+  readonly focusCommitMessage: boolean
   readonly onDiscardAllChanges: (
-    files: ReadonlyArray<WorkingDirectoryFileChange>
+    files: ReadonlyArray<WorkingDirectoryFileChange>,
+    isDiscardingAllChanges?: boolean
   ) => void
 
   /**
@@ -70,7 +72,6 @@ interface IChangesListProps {
    */
   readonly onRowClick?: (row: number, source: ClickSource) => void
   readonly commitMessage: ICommitMessage | null
-  readonly contextualCommitMessage: ICommitMessage | null
 
   /** The autocompletion providers available to the repository. */
   readonly autocompletionProviders: ReadonlyArray<IAutocompletionProvider<any>>
@@ -162,19 +163,20 @@ export class ChangesList extends React.Component<
       selection === DiffSelectionType.All
         ? true
         : selection === DiffSelectionType.None
-          ? false
-          : null
+        ? false
+        : null
 
     return (
       <ChangedFile
+        id={file.id}
         path={file.path}
         status={file.status}
-        oldPath={file.oldPath}
         include={includeAll}
         key={file.id}
         onContextMenu={this.onItemContextMenu}
         onIncludeChanged={this.props.onIncludeChanged}
         availableWidth={this.props.availableWidth}
+        disableSelection={this.props.isCommitting}
       />
     )
   }
@@ -215,7 +217,12 @@ export class ChangesList extends React.Component<
       })
 
       if (modifiedFiles.length > 0) {
-        this.props.onDiscardAllChanges(modifiedFiles)
+        // DiscardAllChanges can also be used for discarding several selected changes.
+        // Therefore, we update the pop up to reflect whether or not it is "all" changes.
+        const discardingAllChanges =
+          modifiedFiles.length === workingDirectory.files.length
+
+        this.props.onDiscardAllChanges(modifiedFiles, discardingAllChanges)
       }
     }
   }
@@ -227,8 +234,8 @@ export class ChangesList extends React.Component<
           ? `Discard Changes`
           : `Discard changes`
         : __DARWIN__
-          ? `Discard ${files.length} Selected Changes`
-          : `Discard ${files.length} selected changes`
+        ? `Discard ${files.length} Selected Changes`
+        : `Discard ${files.length} selected changes`
 
     return this.props.askForConfirmationOnDiscardChanges ? `${label}…` : label
   }
@@ -248,6 +255,7 @@ export class ChangesList extends React.Component<
   }
 
   private onItemContextMenu = (
+    id: string,
     path: string,
     status: AppFileStatus,
     event: React.MouseEvent<HTMLDivElement>
@@ -265,7 +273,7 @@ export class ChangesList extends React.Component<
     const paths = new Array<string>()
     const extensions = new Set<string>()
 
-    this.props.selectedFileIDs.forEach(fileID => {
+    const addItemToArray = (fileID: string) => {
       const newFile = wd.findFileWithID(fileID)
       if (newFile) {
         selectedFiles.push(newFile)
@@ -276,7 +284,17 @@ export class ChangesList extends React.Component<
           extensions.add(extension)
         }
       }
-    })
+    }
+
+    if (this.props.selectedFileIDs.includes(id)) {
+      // user has selected a file inside an existing selection
+      // -> context menu entries should be applied to all selected files
+      this.props.selectedFileIDs.forEach(addItemToArray)
+    } else {
+      // this is outside their previous selection
+      // -> context menu entries should be applied to just this file
+      addItemToArray(id)
+    }
 
     const items: IMenuItem[] = [
       {
@@ -327,9 +345,16 @@ export class ChangesList extends React.Component<
     items.push(
       { type: 'separator' },
       {
+        label: CopyFilePathLabel,
+        action: () => {
+          const fullPath = Path.join(this.props.repository.path, path)
+          clipboard.writeText(fullPath)
+        },
+      },
+      {
         label: RevealInFileManagerLabel,
         action: () => revealInFileManager(this.props.repository, path),
-        enabled: status !== AppFileStatus.Deleted,
+        enabled: status.kind !== AppFileStatusKind.Deleted,
       },
       {
         label: openInExternalEditor,
@@ -337,16 +362,41 @@ export class ChangesList extends React.Component<
           const fullPath = Path.join(this.props.repository.path, path)
           this.props.onOpenInExternalEditor(fullPath)
         },
-        enabled: isSafeExtension && status !== AppFileStatus.Deleted,
+        enabled: isSafeExtension && status.kind !== AppFileStatusKind.Deleted,
       },
       {
         label: OpenWithDefaultProgramLabel,
         action: () => this.props.onOpenItem(path),
-        enabled: isSafeExtension && status !== AppFileStatus.Deleted,
+        enabled: isSafeExtension && status.kind !== AppFileStatusKind.Deleted,
       }
     )
 
     showContextualMenu(items)
+  }
+
+  private getPlaceholderMessage(
+    files: ReadonlyArray<WorkingDirectoryFileChange>,
+    singleFileCommit: boolean
+  ) {
+    if (!singleFileCommit) {
+      return 'Summary (required)'
+    }
+
+    const firstFile = files[0]
+    const fileName = basename(firstFile.path)
+
+    switch (firstFile.status.kind) {
+      case AppFileStatusKind.New:
+        return `Create ${fileName}`
+      case AppFileStatusKind.Deleted:
+        return `Delete ${fileName}`
+      default:
+        // TODO:
+        // this doesn't feel like a great message for AppFileStatus.Copied or
+        // AppFileStatus.Renamed but without more insight (and whether this
+        // affects other parts of the flow) we can just default to this for now
+        return `Update ${fileName}`
+    }
   }
 
   public render() {
@@ -356,6 +406,10 @@ export class ChangesList extends React.Component<
     const filesDescription = `${fileCount} changed ${filesPlural}`
     const anyFilesSelected =
       fileCount > 0 && this.includeAllValue !== CheckboxValue.Off
+    const filesSelected = this.props.workingDirectory.files.filter(
+      f => f.selection.getSelectionType() !== DiffSelectionType.None
+    )
+    const singleFileCommit = filesSelected.length === 1
 
     return (
       <div className="changes-list-container file-list">
@@ -364,7 +418,7 @@ export class ChangesList extends React.Component<
             label={filesDescription}
             value={this.includeAllValue}
             onChange={this.onIncludeAllChanged}
-            disabled={fileCount === 0}
+            disabled={fileCount === 0 || this.props.isCommitting}
           />
         </div>
 
@@ -389,11 +443,17 @@ export class ChangesList extends React.Component<
           repository={this.props.repository}
           dispatcher={this.props.dispatcher}
           commitMessage={this.props.commitMessage}
-          contextualCommitMessage={this.props.contextualCommitMessage}
+          focusCommitMessage={this.props.focusCommitMessage}
           autocompletionProviders={this.props.autocompletionProviders}
           isCommitting={this.props.isCommitting}
           showCoAuthoredBy={this.props.showCoAuthoredBy}
           coAuthors={this.props.coAuthors}
+          placeholder={this.getPlaceholderMessage(
+            filesSelected,
+            singleFileCommit
+          )}
+          singleFileCommit={singleFileCommit}
+          key={this.props.repository.id}
         />
       </div>
     )

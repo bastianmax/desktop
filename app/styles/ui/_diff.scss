@@ -84,6 +84,19 @@
     border-right: 4px solid var(--diff-border-color);
   }
 
+  .diff-line-number {
+    cursor: default;
+  }
+
+  &.diff-add,
+  &.diff-delete {
+    &:not(.read-only) {
+      .diff-line-number {
+        cursor: pointer;
+      }
+    }
+  }
+
   &.read-only .after {
     border-right-width: 1px;
   }
@@ -270,6 +283,9 @@
   .tab-bar {
     width: 350px;
     margin: 10px auto 0;
+    // Workaround to allow toggling between different modes until
+    // root issue with DPI scaling is addressed, see https://github.com/desktop/desktop/issues/2480
+    z-index: 0;
   }
 
   .image-diff-previous {
@@ -520,6 +536,9 @@
   .cm-link {
     text-decoration: underline;
     color: var(--syntax-link-color);
+  }
+  .cm-header {
+    color: var(--syntax-header-color);
   }
 
   // Intra line markings takes precedence over syntax highlighting.

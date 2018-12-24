@@ -24,7 +24,6 @@ import {
   AppStore,
   GitHubUserStore,
   CloningRepositoriesStore,
-  EmojiStore,
   IssuesStore,
   SignInStore,
   RepositoriesStore,
@@ -50,7 +49,9 @@ import {
   enableSourceMaps,
   withSourceMappedStack,
 } from '../lib/source-map-support'
-import { enableCompareSidebar } from '../lib/feature-flag'
+import { UiActivityMonitor } from './lib/ui-activity-monitor'
+import { RepositoryStateCache } from '../lib/stores/repository-state-cache'
+import { ApiRepositoriesStore } from '../lib/stores/api-repositories-store'
 
 if (__DEV__) {
   installDevGlobals()
@@ -80,7 +81,7 @@ const startTime = performance.now()
 
 if (!process.env.TEST_ENV) {
   /* This is the magic trigger for webpack to go compile
-  * our sass into css and inject it into the DOM. */
+   * our sass into css and inject it into the DOM. */
   require('../../styles/desktop.scss')
 }
 
@@ -107,9 +108,11 @@ const gitHubUserStore = new GitHubUserStore(
   new GitHubUserDatabase('GitHubUserDatabase')
 )
 const cloningRepositoriesStore = new CloningRepositoriesStore()
-const emojiStore = new EmojiStore()
 const issuesStore = new IssuesStore(new IssuesDatabase('IssuesDatabase'))
-const statsStore = new StatsStore(new StatsDatabase('StatsDatabase'))
+const statsStore = new StatsStore(
+  new StatsDatabase('StatsDatabase'),
+  new UiActivityMonitor()
+)
 const signInStore = new SignInStore()
 
 const accountsStore = new AccountsStore(localStorage, TokenStore)
@@ -122,27 +125,32 @@ const pullRequestStore = new PullRequestStore(
   repositoriesStore
 )
 
+const repositoryStateManager = new RepositoryStateCache(repo =>
+  gitHubUserStore.getUsersForRepository(repo)
+)
+
+const apiRepositoriesStore = new ApiRepositoriesStore(accountsStore)
+
 const appStore = new AppStore(
   gitHubUserStore,
   cloningRepositoriesStore,
-  emojiStore,
   issuesStore,
   statsStore,
   signInStore,
   accountsStore,
   repositoriesStore,
-  pullRequestStore
+  pullRequestStore,
+  repositoryStateManager,
+  apiRepositoriesStore
 )
 
-const dispatcher = new Dispatcher(appStore)
+const dispatcher = new Dispatcher(appStore, repositoryStateManager, statsStore)
 
 dispatcher.registerErrorHandler(defaultErrorHandler)
 dispatcher.registerErrorHandler(upstreamAlreadyExistsHandler)
 dispatcher.registerErrorHandler(externalEditorErrorHandler)
 dispatcher.registerErrorHandler(openShellErrorHandler)
-if (enableCompareSidebar()) {
-  dispatcher.registerErrorHandler(mergeConflictHandler)
-}
+dispatcher.registerErrorHandler(mergeConflictHandler)
 dispatcher.registerErrorHandler(lfsAttributeMismatchHandler)
 dispatcher.registerErrorHandler(gitAuthenticationErrorHandler)
 dispatcher.registerErrorHandler(pushNeedsPullHandler)
@@ -150,10 +158,6 @@ dispatcher.registerErrorHandler(backgroundTaskHandler)
 dispatcher.registerErrorHandler(missingRepositoryHandler)
 
 document.body.classList.add(`platform-${process.platform}`)
-
-if (localStorage.getItem('theme') === 'dark') {
-  document.body.classList.add(`theme-dark`)
-}
 
 dispatcher.setAppFocusState(remote.getCurrentWindow().isFocused())
 
@@ -185,6 +189,13 @@ ipcRenderer.on(
 )
 
 ReactDOM.render(
-  <App dispatcher={dispatcher} appStore={appStore} startTime={startTime} />,
+  <App
+    dispatcher={dispatcher}
+    appStore={appStore}
+    repositoryStateManager={repositoryStateManager}
+    issuesStore={issuesStore}
+    gitHubUserStore={gitHubUserStore}
+    startTime={startTime}
+  />,
   document.getElementById('desktop-app-container')!
 )

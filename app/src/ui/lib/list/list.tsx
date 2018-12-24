@@ -82,7 +82,7 @@ interface IListProps {
    * can differentiate between the two using the source parameter.
    *
    * Note that this event handler will not be called for keyboard events
-   * if event.preventDefault was called in the onRowKeyDown event handler.
+   * if `event.preventDefault()` was called in the onRowKeyDown event handler.
    *
    * Consumers of this event do _not_ have to call event.preventDefault,
    * when this event is subscribed to the list will automatically call it.
@@ -262,6 +262,12 @@ export class List extends React.Component<IListProps, IListState> {
 
   public constructor(props: IListProps) {
     super(props)
+
+    // If we have a selected row when we're about to mount
+    // we'll scroll to it immediately.
+    if (props.selectedRows.length > 0) {
+      this.scrollToRow = props.selectedRows[0]
+    }
 
     this.state = {}
 
@@ -633,6 +639,7 @@ export class List extends React.Component<IListProps, IListState> {
         style={params.style}
         tabIndex={tabIndex}
         children={element}
+        selectable={selectable}
       />
     )
   }
@@ -822,8 +829,14 @@ export class List extends React.Component<IListProps, IListState> {
         this.props.onRowMouseDown(row, event)
       }
 
+      // macOS allow emulating a right click by holding down the ctrl key while
+      // performing a "normal" click.
+      const isRightClick =
+        event.button === 2 ||
+        (__DARWIN__ && event.button === 0 && event.ctrlKey)
+
       // prevent the right-click event from changing the selection if not necessary
-      if (event.button === 2 && this.props.selectedRows.includes(row)) {
+      if (isRightClick && this.props.selectedRows.includes(row)) {
         return
       }
 

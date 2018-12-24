@@ -16,8 +16,8 @@ body.theme-dark {
   --text-secondary-color: $gray-400;
   --background-color: $gray-900;
 
-  --button-background: black;
-  --button-hover-background: darken($gray-900, 5%);
+  --button-background: $blue;
+  --button-hover-background: lighten($blue, 5%);
   --button-text-color: $white;
   --button-focus-border-color: $blue-600;
 
@@ -60,12 +60,7 @@ body.theme-dark {
    * Background color for skeleton or "loading" boxes
    */
   --box-skeleton-background-color: $gray-700;
-  --skeleton-background-gradient: -webkit-linear-gradient(
-    left,
-    rgba(36, 41, 46, 0) 0%,
-    rgba(36, 41, 46, 0.5) 50%,
-    rgba(36, 41, 46, 0) 100%
-  );
+  --skeleton-background-gradient: -webkit-linear-gradient(left, rgba(36, 41, 46, 0) 0%, rgba(36, 41, 46, 0.5) 50%, rgba(36, 41, 46, 0) 100%);
 
   /**
    * Border color for boxes.
@@ -123,12 +118,13 @@ body.theme-dark {
    * for use when content can be expanded through other means than
    * scrolling.
    */
-  --box-overflow-shadow-background: linear-gradient(
-    180deg,
-    rgba($gray-900, 0) 0%,
-    rgba($gray-900, 1) 90%,
-    rgba($gray-900, 1) 100%
-  );
+  --box-overflow-shadow-background: linear-gradient(180deg, rgba($gray-900, 0) 0%, rgba($gray-900, 1) 90%, rgba($gray-900, 1) 100%);
+
+  /**
+   * Author input (co-authors)
+   */
+  --co-author-tag-background-color: $blue-800;
+  --co-author-tag-border-color: $blue-700;
 
   --base-border: 1px solid var(--box-border-color);
 
@@ -161,6 +157,19 @@ body.theme-dark {
   --toolbar-dropdown-open-progress-color: $gray-200;
 
   /**
+    * App menu bar colors (Windows/Linux only)
+    */
+  --app-menu-button-color: var(--toolbar-text-color);
+  --app-menu-button-hover-color: var(--toolbar-button-hover-color);
+  --app-menu-button-hover-background-color: var(--toolbar-button-hover-background-color);
+  --app-menu-button-active-color: var(--text-color);
+  --app-menu-button-active-background-color: $gray-800;
+  --app-menu-pane-color: var(--text-color);
+  --app-menu-pane-secondary-color: var(--text-secondary-color);
+  --app-menu-pane-background-color: $gray-800;
+  --app-menu-divider-color: $gray-600;
+
+  /**
    * Background color for badges inside of toolbar buttons.
    * Examples of badges are the ahead/behind bubble in the
    * push/pull button and the PR badge in the branch drop
@@ -171,10 +180,24 @@ body.theme-dark {
 
   --tab-bar-active-color: $blue;
   --tab-bar-background-color: var(--box-background-color);
+  --tab-bar-hover-background-color: $gray-800;
 
   /** Count bubble colors when used inside of a tab bar item */
   --tab-bar-count-color: var(--text-color);
   --tab-bar-count-background-color: $gray-700;
+
+  /**
+    * Badge colors when used inside of list items.
+    * Example of this is the ahead/behind indicators inside
+    * of the repository list.
+    */
+  --list-item-badge-color: var(--text-color);
+  --list-item-badge-background-color: $gray-600;
+  --list-item-selected-badge-color: $white;
+  --list-item-selected-badge-background-color: $gray-500;
+  --list-item-selected-active-badge-color: $gray-900;
+  --list-item-selected-active-badge-background-color: $white;
+  --list-item-hover-background-color: $gray-800;
 
   /**
    * Toast notifications are shown temporarily for things like the zoom
@@ -209,11 +232,11 @@ body.theme-dark {
   --diff-selected-gutter-color: $blue-600;
   --diff-selected-text-color: var(--text-color);
 
-  --diff-add-background-color: darken($green-900, 10%);
-  --diff-add-border-color: darken($green-900, 10%);
-  --diff-add-gutter-color: darken($green-900, 10%);
-  --diff-add-gutter-background-color: darken($green-900, 13%);
-  --diff-add-inner-background-color: $green-900;
+  --diff-add-background-color: darken($green-900, 3%);
+  --diff-add-border-color: darken($green-900, 2%);
+  --diff-add-gutter-color: darken($green-900, 2%);
+  --diff-add-gutter-background-color: darken($green-900, 8%);
+  --diff-add-inner-background-color: $green-600;
   --diff-add-text-color: var(--diff-text-color);
 
   --diff-delete-background-color: darken($red-900, 15%);
@@ -256,6 +279,7 @@ body.theme-dark {
   --syntax-tag-color: $green-400;
   --syntax-attribute-color: $purple-300;
   --syntax-link-color: $blue-300;
+  --syntax-header-color: $red-300;
 
   // Colors for form errors
   --error-color: $red;
@@ -276,4 +300,16 @@ body.theme-dark {
   .blankslate-image {
     filter: #{'invert()'} grayscale(1) brightness(8) contrast(0.6);
   }
+
+  /** Diverging notification banner colors */
+  --notification-banner-background: $gray-800;
+  --notification-banner-border-color: $gray-700;
+  --notification-ref-background: $gray-700;
+}
+
+// this emulates the cursor for the co-author input because it isn't exactly
+// an input element. credit for identify the right CSS class name goes to
+// this post: https://css-tricks.com/snippets/css/solarized-theme-for-codemirror-and-prettify/
+.CodeMirror-cursor {
+  border-left-color: currentColor;
 }

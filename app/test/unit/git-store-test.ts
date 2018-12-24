@@ -1,4 +1,3 @@
-import { expect } from 'chai'
 import * as FSE from 'fs-extra'
 import * as Path from 'path'
 import { GitProcess } from 'dugite'
@@ -7,16 +6,30 @@ import { shell } from '../helpers/test-app-shell'
 import {
   setupEmptyRepository,
   setupFixtureRepository,
-  setupConflictedRepo,
 } from '../helpers/repositories'
 import { GitStore } from '../../src/lib/stores'
-import { AppFileStatus } from '../../src/models/status'
+import { AppFileStatusKind } from '../../src/models/status'
 import { Repository } from '../../src/models/repository'
 import { Commit } from '../../src/models/commit'
 import { TipState, IValidBranch } from '../../src/models/tip'
-import { getCommit, getStatus } from '../../src/lib/git'
+import { getCommit } from '../../src/lib/git'
+import { getStatusOrThrow } from '../helpers/status'
 
 describe('GitStore', () => {
+  describe('loadCommitBatch', () => {
+    it('includes HEAD when loading commits', async () => {
+      const path = await setupFixtureRepository('repository-with-105-commits')
+      const repo = new Repository(path, -1, null, false)
+      const gitStore = new GitStore(repo, shell)
+
+      const commits = await gitStore.loadCommitBatch('HEAD')
+
+      expect(commits).not.toBeNull()
+      expect(commits).toHaveLength(100)
+      expect(commits![0]).toEqual('708a46eac512c7b2486da2247f116d11a100b611')
+    })
+  })
+
   it('can discard changes from a repository', async () => {
     const repo = await setupEmptyRepository()
     const gitStore = new GitStore(repo, shell)
@@ -39,20 +52,20 @@ describe('GitStore', () => {
     // setup requires knowing about the current tip
     await gitStore.loadStatus()
 
-    let status = await getStatus(repo)
+    let status = await getStatusOrThrow(repo)
     let files = status.workingDirectory.files
 
-    expect(files.length).to.equal(2)
-    expect(files[0].path).to.equal('README.md')
-    expect(files[0].status).to.equal(AppFileStatus.Modified)
+    expect(files).toHaveLength(2)
+    expect(files[0].path).toEqual('README.md')
+    expect(files[0].status.kind).toEqual(AppFileStatusKind.Modified)
 
     // discard the LICENSE.md file
     await gitStore.discardChanges([files[1]])
 
-    status = await getStatus(repo)
+    status = await getStatusOrThrow(repo)
     files = status.workingDirectory.files
 
-    expect(files.length).to.equal(1)
+    expect(files).toHaveLength(1)
   })
 
   it('can discard a renamed file', async () => {
@@ -70,16 +83,16 @@ describe('GitStore', () => {
     await GitProcess.exec(['commit', '-m', 'added file'], repo.path)
     await GitProcess.exec(['mv', file, renamedFile], repo.path)
 
-    const statusBeforeDiscard = await getStatus(repo)
+    const statusBeforeDiscard = await getStatusOrThrow(repo)
     const filesToDiscard = statusBeforeDiscard.workingDirectory.files
 
     // discard the renamed file
     await gitStore.discardChanges(filesToDiscard)
 
-    const status = await getStatus(repo)
+    const status = await getStatusOrThrow(repo)
     const files = status.workingDirectory.files
 
-    expect(files.length).to.equal(0)
+    expect(files).toHaveLength(0)
   })
 
   describe('undo first commit', () => {
@@ -100,22 +113,20 @@ describe('GitStore', () => {
       await GitProcess.exec(['commit', '-m', commitMessage], repo.path)
 
       firstCommit = await getCommit(repo!, 'master')
-      expect(firstCommit).to.not.equal(null)
-      expect(firstCommit!.parentSHAs.length).to.equal(0)
+      expect(firstCommit).not.toBeNull()
+      expect(firstCommit!.parentSHAs).toHaveLength(0)
     })
 
     it('reports the repository is unborn', async () => {
       const gitStore = new GitStore(repo!, shell)
 
       await gitStore.loadStatus()
-      expect(gitStore.tip.kind).to.equal(TipState.Valid)
+      expect(gitStore.tip.kind).toEqual(TipState.Valid)
 
       await gitStore.undoCommit(firstCommit!)
 
-      const after = await getStatus(repo!)
-
-      expect(after).to.not.be.null
-      expect(after!.currentTip).to.be.undefined
+      const after = await getStatusOrThrow(repo!)
+      expect(after.currentTip).toBeUndefined()
     })
 
     it('pre-fills the commit message', async () => {
@@ -123,9 +134,9 @@ describe('GitStore', () => {
 
       await gitStore.undoCommit(firstCommit!)
 
-      const context = gitStore.contextualCommitMessage
-      expect(context).to.not.be.null
-      expect(context!.summary).to.equal(commitMessage)
+      const newCommitMessage = gitStore.commitMessage
+      expect(newCommitMessage).not.toBeNull()
+      expect(newCommitMessage!.summary).toEqual(commitMessage)
     })
 
     it('clears the undo commit dialog', async () => {
@@ -136,16 +147,16 @@ describe('GitStore', () => {
       const tip = gitStore.tip as IValidBranch
       await gitStore.loadLocalCommits(tip.branch)
 
-      expect(gitStore.localCommitSHAs.length).to.equal(1)
+      expect(gitStore.localCommitSHAs).toHaveLength(1)
 
       await gitStore.undoCommit(firstCommit!)
 
       await gitStore.loadStatus()
-      expect(gitStore.tip.kind).to.equal(TipState.Unborn)
+      expect(gitStore.tip.kind).toEqual(TipState.Unborn)
 
       await gitStore.loadLocalCommits(null)
 
-      expect(gitStore.localCommitSHAs).to.be.empty
+      expect(gitStore.localCommitSHAs).toHaveLength(0)
     })
 
     it('has no staged files', async () => {
@@ -156,7 +167,7 @@ describe('GitStore', () => {
       const tip = gitStore.tip as IValidBranch
       await gitStore.loadLocalCommits(tip.branch)
 
-      expect(gitStore.localCommitSHAs.length).to.equal(1)
+      expect(gitStore.localCommitSHAs.length).toEqual(1)
 
       await gitStore.undoCommit(firstCommit!)
 
@@ -172,20 +183,8 @@ describe('GitStore', () => {
         ],
         repo!.path
       )
-      expect(result.stdout.length).to.equal(0)
+      expect(result.stdout.length).toEqual(0)
     })
-  })
-
-  it('hides commented out lines from MERGE_MSG', async () => {
-    const repo = await setupConflictedRepo()
-    const gitStore = new GitStore(repo, shell)
-
-    await gitStore.loadContextualCommitMessage()
-
-    const context = gitStore.contextualCommitMessage
-    expect(context).to.not.be.null
-    expect(context!.summary).to.equal(`Merge branch 'master' into other-branch`)
-    expect(context!.description).to.be.null
   })
 
   describe('repository with HEAD file', () => {
@@ -199,15 +198,15 @@ describe('GitStore', () => {
 
       await FSE.writeFile(filePath, 'SOME WORDS GO HERE\n')
 
-      let status = await getStatus(repo!)
+      let status = await getStatusOrThrow(repo!)
       let files = status.workingDirectory.files
-      expect(files.length).to.equal(1)
+      expect(files.length).toEqual(1)
 
       await gitStore.discardChanges([files[0]])
 
-      status = await getStatus(repo)
+      status = await getStatusOrThrow(repo)
       files = status.workingDirectory.files
-      expect(files.length).to.equal(0)
+      expect(files.length).toEqual(0)
     })
   })
 })

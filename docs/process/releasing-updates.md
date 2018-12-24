@@ -96,7 +96,7 @@ Here's what you should do next:
 7. Read this to perform the release: https://github.com/desktop/desktop/blob/master/docs/process/releasing-updates.md
 ```
 
-** Note: You should ensure the `version` in `app/package.json` is set to the new version and follows the [semver format](https://semver.org/) of `major.minor.patch`. 
+_Note: You should ensure the `version` in `app/package.json` is set to the new version and follows the [semver format](https://semver.org/) of `major.minor.patch`._ 
 
 Examples:
 * for prod, `1.1.0` -> `1.1.1` or `1.1.13` -> `1.2.0` 
@@ -118,20 +118,29 @@ Here's an example of the previous changelog draft after it has been edited:
 }
 ```
 
-Once you've pushed up the version update and the changelog changes, you're ready to release! Get the others on the team to :thumbsup: in a PR if you're not sure. Note that any version change that does not have an associated changelog entry will not successfully release.
+Create a new branch to represent the work that will be released to users:
+
+ - for `beta` releases, branch from `master` to ensure the latest changes are published
+ - for `production` releases, branch from the latest beta tag
+    - to find this tag: `git tag | grep 'beta' | sort -r | head -n 1`
+
+If you are creating a new beta release, the `yarn draft-release beta` command will help you find the new release entries for the changelog.
+
+If you are create a new `production` release, you should just combine and sort the previous `beta` changelog entries.
+
+Add your new changelog entries to `changelog.json`, update the version in `app/package.json`, commit the changes, and push this branch to GitHub. This becomes the release branch, and lets other maintainers continue to merge into `master` without affecting your release.
+
+If a maintainer would like to backport a pull request to the next release, it is their responsibilty to co-ordinate with the release owner and ensure they are fine with accepting this work.
+
+Once your release branch is ready to review and ship, add the `ready-for-review` label and ask the other maintainers to review and approve the changes!
 
 ### 3. Releasing
 
-When you feel ready to start the deployment, run this command in Chat:
+When you are ready to start the deployment, run this command in chat (where `X.Y.Z-release` is the name of your release branch):
 
 ```
-.release! desktop/YOUR_BRANCH to {production|beta|test}
+.release! desktop/X.Y.Z-release to {production|beta|test}
 ```
-
-If you are releasing from master, YOUR_BRANCH is unnecessary; write:
-```
-.release! desktop to {production|beta|test}
-``` 
 
 We're using `.release` with a bang so that we don't have to wait for any current CI on the branch to finish. This might feel a little wrong, but it's OK since making the release itself will also run CI.
 
@@ -156,13 +165,13 @@ Testing that an update is detected, downloaded, and applied correctly is very im
 
 If you don't have the app for `beta`, for example, you can always download the previous version on Central to see it update 
 
-** Make sure you move your application out of the Downloads folder and into the Applications folder for macOS or it won't auto-update.
+_Make sure you move your application out of the Downloads folder and into the Applications folder for macOS or it won't auto-update_.
 
 ### 6. Check Error Reporting
 
 If an error occurs during the release process, a needle will be reported to Central's [Haystack](https://haystack.githubapp.com/central).
 
-It is normal to monitor Haystack closely for 15 minutes just to make sure.
+After the release is deployed, you should monitor Desktop's [Haystack](https://haystack.githubapp.com/desktop) closely for 15 minutes to ensure no unexpected needles appear.
 
 ### 6. Celebrate
 

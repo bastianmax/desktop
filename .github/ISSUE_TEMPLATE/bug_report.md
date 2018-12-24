@@ -1,5 +1,5 @@
 ---
-name: 🐛 Bug report
+name: "\U0001F41B Bug report"
 about: Report a problem encountered while using GitHub Desktop
 
 ---
@@ -56,7 +56,7 @@ If you have screen shots or gifs that demonstrate the issue, please include them
 
 If the issue involves a specific public repository, including the information about it will make it easier to recreate the issue.
 
-If you are dealing with a performance issue or regression, attaching a Timeline profile of the task will help the developers understand the runtime behavior of the application on your machine.
+If you are dealing with a performance issue or regression, attaching a Performance profile of the task will help the developers understand the runtime behavior of the application on your machine.
 https://github.com/desktop/desktop/blob/master/docs/contributing/timeline-profile.md
 -->
 

@@ -7,24 +7,17 @@ import { Changes, ChangesSidebar } from './changes'
 import { NoChanges } from './changes/no-changes'
 import { MultipleSelection } from './changes/multiple-selection'
 import { FilesChangedBadge } from './changes/files-changed-badge'
-import { History, HistorySidebar, CompareSidebar } from './history'
+import { SelectedCommit, CompareSidebar } from './history'
 import { Resizable } from './resizable'
 import { TabBar } from './tab-bar'
-import {
-  IRepositoryState,
-  RepositorySectionTab,
-  ImageDiffType,
-} from '../lib/app-state'
+import { IRepositoryState, RepositorySectionTab } from '../lib/app-state'
 import { Dispatcher } from '../lib/dispatcher'
 import { IssuesStore, GitHubUserStore } from '../lib/stores'
 import { assertNever } from '../lib/fatal-error'
-import { Octicon, OcticonSymbol } from './octicons'
 import { Account } from '../models/account'
-import {
-  enableCompareSidebar,
-  enableNotificationOfBranchUpdates,
-} from '../lib/feature-flag'
 import { FocusContainer } from './lib/focus-container'
+import { OcticonSymbol, Octicon } from './octicons'
+import { ImageDiffType } from '../models/diff'
 
 /** The widest the sidebar can be with the minimum window size. */
 const MaxSidebarWidth = 495
@@ -41,6 +34,7 @@ interface IRepositoryViewProps {
   readonly onViewCommitOnGitHub: (SHA: string) => void
   readonly imageDiffType: ImageDiffType
   readonly askForConfirmationOnDiscardChanges: boolean
+  readonly focusCommitMessage: boolean
   readonly accounts: ReadonlyArray<Account>
 
   /** The name of the currently selected external editor */
@@ -51,7 +45,6 @@ interface IRepositoryViewProps {
    *
    * @param fullPath The full path to the file on disk
    */
-
   readonly onOpenInExternalEditor: (fullPath: string) => void
 }
 
@@ -84,11 +77,7 @@ export class RepositoryView extends React.Component<
       return null
     }
 
-    return enableNotificationOfBranchUpdates() ? (
-      <FilesChangedBadge filesChangedCount={filesChangedCount} />
-    ) : (
-      <Octicon className="indicator" symbol={OcticonSymbol.primitiveDot} />
-    )
+    return <FilesChangedBadge filesChangedCount={filesChangedCount} />
   }
 
   private renderTabs(): JSX.Element {
@@ -103,7 +92,16 @@ export class RepositoryView extends React.Component<
           <span>Changes</span>
           {this.renderChangesBadge()}
         </span>
-        <span>History</span>
+
+        <div className="with-indicator">
+          <span>History</span>
+          {this.props.state.compareState.isDivergingBranchBannerVisible ? (
+            <Octicon
+              className="indicator"
+              symbol={OcticonSymbol.primitiveDot}
+            />
+          ) : null}
+        </div>
       </TabBar>
     )
   }
@@ -138,28 +136,13 @@ export class RepositoryView extends React.Component<
         gitHubUserStore={this.props.gitHubUserStore}
         isCommitting={this.props.state.isCommitting}
         isPushPullFetchInProgress={this.props.state.isPushPullFetchInProgress}
+        focusCommitMessage={this.props.focusCommitMessage}
         askForConfirmationOnDiscardChanges={
           this.props.askForConfirmationOnDiscardChanges
         }
         accounts={this.props.accounts}
         externalEditorLabel={this.props.externalEditorLabel}
         onOpenInExternalEditor={this.props.onOpenInExternalEditor}
-      />
-    )
-  }
-
-  private renderHistorySidebar(): JSX.Element {
-    return (
-      <HistorySidebar
-        repository={this.props.repository}
-        dispatcher={this.props.dispatcher}
-        history={this.props.state.historyState}
-        gitHubUsers={this.props.state.gitHubUsers}
-        emoji={this.props.emoji}
-        commitLookup={this.props.state.commitLookup}
-        localCommitSHAs={this.props.state.localCommitSHAs}
-        onRevertCommit={this.onRevertCommit}
-        onViewCommitOnGitHub={this.props.onViewCommitOnGitHub}
       />
     )
   }
@@ -172,6 +155,7 @@ export class RepositoryView extends React.Component<
       <CompareSidebar
         repository={this.props.repository}
         compareState={this.props.state.compareState}
+        selectedCommitSha={this.props.state.commitSelection.sha}
         currentBranch={currentBranch}
         gitHubUsers={this.props.state.gitHubUsers}
         emoji={this.props.emoji}
@@ -190,9 +174,7 @@ export class RepositoryView extends React.Component<
     if (selectedSection === RepositorySectionTab.Changes) {
       return this.renderChangesSidebar()
     } else if (selectedSection === RepositorySectionTab.History) {
-      return enableCompareSidebar()
-        ? this.renderCompareSidebar()
-        : this.renderHistorySidebar()
+      return this.renderCompareSidebar()
     } else {
       return assertNever(selectedSection, 'Unknown repository section')
     }
@@ -273,16 +255,27 @@ export class RepositoryView extends React.Component<
         )
       }
     } else if (selectedSection === RepositorySectionTab.History) {
+      const { commitSelection } = this.props.state
+
+      const sha = commitSelection.sha
+
+      const selectedCommit =
+        sha != null ? this.props.state.commitLookup.get(sha) || null : null
+
+      const { changedFiles, file, diff } = commitSelection
+
       return (
-        <History
+        <SelectedCommit
           repository={this.props.repository}
           dispatcher={this.props.dispatcher}
-          history={this.props.state.historyState}
+          selectedCommit={selectedCommit}
+          changedFiles={changedFiles}
+          selectedFile={file}
+          currentDiff={diff}
           emoji={this.props.emoji}
-          commits={this.props.state.commitLookup}
           commitSummaryWidth={this.props.commitSummaryWidth}
           gitHubUsers={this.props.state.gitHubUsers}
-          imageDiffType={this.props.imageDiffType}
+          selectedDiffType={this.props.imageDiffType}
           externalEditorLabel={this.props.externalEditorLabel}
           onOpenInExternalEditor={this.props.onOpenInExternalEditor}
         />
@@ -333,5 +326,10 @@ export class RepositoryView extends React.Component<
       this.props.repository,
       section
     )
+    if (!!section) {
+      this.props.dispatcher.updateCompareForm(this.props.repository, {
+        showBranchList: false,
+      })
+    }
   }
 }

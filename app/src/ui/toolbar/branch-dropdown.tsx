@@ -66,6 +66,8 @@ export class BranchDropdown extends React.Component<IBranchDropdownProps> {
         pullRequests={this.props.pullRequests}
         currentPullRequest={this.props.currentPullRequest}
         isLoadingPullRequests={this.props.isLoadingPullRequests}
+        branchFilterText={repositoryState.branchFilterText}
+        pullRequestFilterText={repositoryState.pullRequestFilterText}
       />
     )
   }
@@ -162,6 +164,6 @@ export class BranchDropdown extends React.Component<IBranchDropdownProps> {
       return null
     }
 
-    return <PullRequestBadge number={pr.number} status={pr.status} />
+    return <PullRequestBadge number={pr.pullRequestNumber} status={pr.status} />
   }
 }

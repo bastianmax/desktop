@@ -42,11 +42,8 @@ $overlay-background-color: rgba(0, 0, 0, 0.4);
   // Typography
   //
   // Font, line-height, and color for body text, headings, and more.
-  --font-family-sans-serif: -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans',
-    'Helvetica Neue', Arial, sans-serif;
-  --font-family-monospace: Menlo, Monaco, Consolas, 'Liberation Mono',
-    'Courier New', monospace;
+  --font-family-sans-serif: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', Arial, sans-serif;
+  --font-family-monospace: Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 
   /**
    * Font weight to use for semibold text
@@ -99,12 +96,7 @@ $overlay-background-color: rgba(0, 0, 0, 0.4);
    * Background color for skeleton or "loading" boxes
    */
   --box-skeleton-background-color: $gray-200;
-  --skeleton-background-gradient: -webkit-linear-gradient(
-    left,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.5) 50%,
-    rgba(255, 255, 255, 0) 100%
-  );
+  --skeleton-background-gradient: -webkit-linear-gradient(left, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.5) 50%, rgba(255, 255, 255, 0) 100%);
 
   /**
    * Border color for boxes.
@@ -162,12 +154,13 @@ $overlay-background-color: rgba(0, 0, 0, 0.4);
    * for use when content can be expanded through other means than
    * scrolling.
    */
-  --box-overflow-shadow-background: linear-gradient(
-    180deg,
-    rgba($white, 0) 0%,
-    rgba($white, 1) 90%,
-    rgba($white, 1) 100%
-  );
+  --box-overflow-shadow-background: linear-gradient(180deg, rgba($white, 0) 0%, rgba($white, 1) 90%, rgba($white, 1) 100%);
+
+  /**
+   * Author input (co-authors)
+   */
+  --co-author-tag-background-color: $blue-000;
+  --co-author-tag-border-color: $blue-200;
 
   /**
    * The height of the title bar area on Win32 platforms
@@ -223,6 +216,19 @@ $overlay-background-color: rgba(0, 0, 0, 0.4);
   --toolbar-dropdown-open-progress-color: $gray-200;
 
   /**
+   * App menu bar colors (Windows/Linux only)
+   */
+  --app-menu-button-color: var(--toolbar-text-color);
+  --app-menu-button-hover-color: var(--toolbar-button-hover-color);
+  --app-menu-button-hover-background-color: var(--toolbar-button-hover-background-color);
+  --app-menu-button-active-color: var(--toolbar-button-active-color);
+  --app-menu-button-active-background-color: var(--toolbar-button-active-background-color);
+  --app-menu-pane-color: var(--text-color);
+  --app-menu-pane-secondary-color: var(--text-secondary-color);
+  --app-menu-pane-background-color: var(--toolbar-button-active-background-color);
+  --app-menu-divider-color: var(--box-border-color);
+
+  /**
     * Background color for badges inside of toolbar buttons.
     * Examples of badges are the ahead/behind bubble in the
     * push/pull button and the PR badge in the branch drop
@@ -234,10 +240,24 @@ $overlay-background-color: rgba(0, 0, 0, 0.4);
   --tab-bar-height: 29px;
   --tab-bar-active-color: $blue;
   --tab-bar-background-color: $white;
+  --tab-bar-hover-background-color: $gray-100;
 
   /** Count bubble colors when used inside of a tab bar item */
   --tab-bar-count-color: var(--text-color);
   --tab-bar-count-background-color: $gray-200;
+
+  /**
+    * Badge colors when used inside of list items.
+    * Example of this is the change indicators inside
+    * of the repository list.
+    */
+  --list-item-badge-color: $gray-800;
+  --list-item-badge-background-color: $gray-200;
+  --list-item-selected-badge-color: $gray-900;
+  --list-item-selected-badge-background-color: $gray-300;
+  --list-item-selected-active-badge-color: $gray-900;
+  --list-item-selected-active-badge-background-color: $white;
+  --list-item-hover-background-color: $gray-100;
 
   /** Win32 has custom scrol bars, see _scroll.scss */
   --win32-scroll-bar-size: 10px;
@@ -261,6 +281,9 @@ $overlay-background-color: rgba(0, 0, 0, 0.4);
    */
   --toast-notification-color: $gray-000;
   --toast-notification-background-color: rgba($gray-900, 0.6);
+
+  --tip-box-background-color: rgba($blue-500, 0.06);
+  --tip-box-border-color: $blue-200;
 
   /** The highlight color used for focus rings and focus box shadows */
   --focus-color: $blue;
@@ -337,6 +360,7 @@ $overlay-background-color: rgba(0, 0, 0, 0.4);
   --syntax-tag-color: #22863a;
   --syntax-attribute-color: #6f42c1;
   --syntax-link-color: #032f62;
+  --syntax-header-color: #0000ff;
 
   // Note that this duration *must* match the `UndoCommitAnimationTimeout`
   // specified in `changes/index.tsx`.

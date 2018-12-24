@@ -3,13 +3,13 @@ import * as React from 'react'
 
 import { ChangesList } from './changes-list'
 import { DiffSelectionType } from '../../models/diff'
-import { IChangesState, PopupType } from '../../lib/app-state'
+import { IChangesState } from '../../lib/app-state'
 import { Repository } from '../../models/repository'
 import { Dispatcher } from '../../lib/dispatcher'
 import { IGitHubUser } from '../../lib/databases'
 import { IssuesStore, GitHubUserStore } from '../../lib/stores'
 import { CommitIdentity } from '../../models/commit-identity'
-import { Commit } from '../../models/commit'
+import { Commit, ICommitContext } from '../../models/commit'
 import { UndoCommit } from './undo-commit'
 import {
   IAutocompletionProvider,
@@ -18,11 +18,18 @@ import {
   UserAutocompletionProvider,
 } from '../autocompletion'
 import { ClickSource } from '../lib/list'
-import { WorkingDirectoryFileChange } from '../../models/status'
+import {
+  WorkingDirectoryFileChange,
+  ConflictedFileStatus,
+} from '../../models/status'
 import { CSSTransitionGroup } from 'react-transition-group'
 import { openFile } from '../../lib/open-file'
-import { ITrailer } from '../../lib/git/interpret-trailers'
 import { Account } from '../../models/account'
+import { PopupType } from '../../models/popup'
+import { enableFileSizeWarningCheck } from '../../lib/feature-flag'
+import { filesNotTrackedByLFS } from '../../lib/git/lfs'
+import { getLargeFilePaths } from '../../lib/large-files'
+import { isConflictedFile } from '../../lib/status'
 
 /**
  * The timeout for the animation of the enter/leave animation for Undo.
@@ -46,6 +53,7 @@ interface IChangesSidebarProps {
   readonly isCommitting: boolean
   readonly isPushPullFetchInProgress: boolean
   readonly gitHubUserStore: GitHubUserStore
+  readonly focusCommitMessage: boolean
   readonly askForConfirmationOnDiscardChanges: boolean
   readonly accounts: ReadonlyArray<Account>
   /** The name of the currently selected external editor */
@@ -76,12 +84,13 @@ export class ChangesSidebar extends React.Component<IChangesSidebarProps, {}> {
 
   private receiveProps(props: IChangesSidebarProps) {
     if (
-      props.repository.id !== this.props.repository.id ||
-      !this.autocompletionProviders ||
+      this.autocompletionProviders === null ||
+      this.props.emoji.size === 0 ||
+      props.repository.hash !== this.props.repository.hash ||
       props.accounts !== this.props.accounts
     ) {
       const autocompletionProviders: IAutocompletionProvider<any>[] = [
-        new EmojiAutocompletionProvider(this.props.emoji),
+        new EmojiAutocompletionProvider(props.emoji),
       ]
 
       // Issues autocompletion is only available for GitHub repositories.
@@ -112,16 +121,65 @@ export class ChangesSidebar extends React.Component<IChangesSidebarProps, {}> {
     }
   }
 
-  private onCreateCommit = (
-    summary: string,
-    description: string | null,
-    trailers?: ReadonlyArray<ITrailer>
+  private onCreateCommit = async (
+    context: ICommitContext
   ): Promise<boolean> => {
+    if (enableFileSizeWarningCheck()) {
+      const overSizedFiles = await getLargeFilePaths(
+        this.props.repository,
+        this.props.changes.workingDirectory,
+        100
+      )
+      const filesIgnoredByLFS = await filesNotTrackedByLFS(
+        this.props.repository,
+        overSizedFiles
+      )
+
+      if (filesIgnoredByLFS.length !== 0) {
+        this.props.dispatcher.showPopup({
+          type: PopupType.OversizedFiles,
+          oversizedFiles: filesIgnoredByLFS,
+          context: context,
+          repository: this.props.repository,
+        })
+
+        return false
+      }
+    }
+
+    // are any conflicted files left?
+    const conflictedFilesLeft = this.props.changes.workingDirectory.files.filter(
+      f =>
+        isConflictedFile(f.status) &&
+        f.selection.getSelectionType() === DiffSelectionType.None
+    )
+
+    if (conflictedFilesLeft.length === 0) {
+      this.props.dispatcher.clearMergeConflictsBanner()
+      this.props.dispatcher.recordUnguidedConflictedMergeCompletion()
+    }
+
+    // which of the files selected for committing are conflicted?
+    const conflictedFilesSelected = this.props.changes.workingDirectory.files.filter(
+      f =>
+        isConflictedFile(f.status) &&
+        hasUnresolvedConflicts(f.status) &&
+        f.selection.getSelectionType() !== DiffSelectionType.None
+    )
+
+    if (conflictedFilesSelected.length > 0) {
+      this.props.dispatcher.showPopup({
+        type: PopupType.CommitConflictsWarning,
+        files: conflictedFilesSelected,
+        repository: this.props.repository,
+        context,
+      })
+      return false
+    }
+
     return this.props.dispatcher.commitIncludedChanges(
       this.props.repository,
-      summary,
-      description,
-      trailers
+      context
     )
   }
 
@@ -168,18 +226,20 @@ export class ChangesSidebar extends React.Component<IChangesSidebarProps, {}> {
   }
 
   private onDiscardAllChanges = (
-    files: ReadonlyArray<WorkingDirectoryFileChange>
+    files: ReadonlyArray<WorkingDirectoryFileChange>,
+    isDiscardingAllChanges: boolean = true
   ) => {
     this.props.dispatcher.showPopup({
       type: PopupType.ConfirmDiscardChanges,
       repository: this.props.repository,
       showDiscardChangesSetting: false,
+      discardingAllChanges: isDiscardingAllChanges,
       files,
     })
   }
 
   private onIgnore = (pattern: string | string[]) => {
-    this.props.dispatcher.ignore(this.props.repository, pattern)
+    this.props.dispatcher.appendIgnoreRule(this.props.repository, pattern)
   }
 
   /**
@@ -305,7 +365,7 @@ export class ChangesSidebar extends React.Component<IChangesSidebarProps, {}> {
           branch={this.props.branch}
           gitHubUser={user}
           commitMessage={this.props.changes.commitMessage}
-          contextualCommitMessage={this.props.changes.contextualCommitMessage}
+          focusCommitMessage={this.props.focusCommitMessage}
           autocompletionProviders={this.autocompletionProviders!}
           availableWidth={this.props.availableWidth}
           onIgnore={this.onIgnore}
@@ -319,4 +379,18 @@ export class ChangesSidebar extends React.Component<IChangesSidebarProps, {}> {
       </div>
     )
   }
+}
+
+/**
+ * Determine if we have a `ManualConflict` type
+ * or conflict markers
+ */
+function hasUnresolvedConflicts(status: ConflictedFileStatus) {
+  if (!status.lookForConflictMarkers) {
+    // binary file doesn't contain markers
+    return true
+  }
+
+  // text file will have conflict markers removed
+  return status.conflictMarkerCount > 0
 }

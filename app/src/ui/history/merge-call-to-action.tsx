@@ -1,6 +1,6 @@
 import * as React from 'react'
 
-import { CompareActionKind, ICompareBranch } from '../../lib/app-state'
+import { ICompareBranch, HistoryTabMode } from '../../lib/app-state'
 import { Repository } from '../../models/repository'
 import { Branch } from '../../models/branch'
 import { Dispatcher } from '../../lib/dispatcher'
@@ -11,6 +11,11 @@ interface IMergeCallToActionProps {
   readonly dispatcher: Dispatcher
   readonly currentBranch: Branch
   readonly formState: ICompareBranch
+
+  /**
+   * Callback to execute after a merge has been performed
+   */
+  readonly onMerged: () => void
 }
 
 export class MergeCallToAction extends React.Component<
@@ -45,12 +50,16 @@ export class MergeCallToAction extends React.Component<
     if (count > 0) {
       const pluralized = count === 1 ? 'commit' : 'commits'
       return (
-        <div className="merge-message">
+        <div className="merge-message merge-message-legacy">
           This will merge
           <strong>{` ${count} ${pluralized}`}</strong>
-          {` `}from{` `}
+          {` `}
+          from
+          {` `}
           <strong>{branch.name}</strong>
-          {` `}into{` `}
+          {` `}
+          into
+          {` `}
           <strong>{currentBranch.name}</strong>
         </div>
       )
@@ -59,23 +68,25 @@ export class MergeCallToAction extends React.Component<
     return null
   }
 
-  private onMergeClicked = async (event: React.MouseEvent<any>) => {
+  private onMergeClicked = async () => {
     const formState = this.props.formState
 
     this.props.dispatcher.recordCompareInitiatedMerge()
 
     await this.props.dispatcher.mergeBranch(
       this.props.repository,
-      formState.comparisonBranch.name
+      formState.comparisonBranch.name,
+      null
     )
 
     this.props.dispatcher.executeCompare(this.props.repository, {
-      kind: CompareActionKind.History,
+      kind: HistoryTabMode.History,
     })
 
     this.props.dispatcher.updateCompareForm(this.props.repository, {
       showBranchList: false,
       filterText: '',
     })
+    this.props.onMerged()
   }
 }
